@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>語文大腦體操 - 注意力尋寶產生器</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        
+        :root {
+            --primary: #0284c7;
+            --primary-light: #e0f2fe;
+            --accent: #f59e0b;
+        }
+
+        body { 
+            font-family: 'Inter', "PingFang TC", "Microsoft JhengHei", sans-serif; 
+            background: #f8fafc; 
+        }
+
+        .sheet {
+            background: white;
+            width: 210mm;
+            height: 297mm;
+            padding: 15mm 20mm;
+            box-sizing: border-box;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            margin: 20px auto;
+        }
+
+        .sheet-scaler { transform-origin: top center; margin-bottom: 20px; }
+
+        .item-card {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: #ffffff;
+            transition: all 0.3s;
+        }
+
+        .item-emoji { font-size: 3rem; margin-bottom: 5px; }
+        .item-name { font-weight: bold; font-size: 1.1rem; color: #1e293b; }
+
+        /* Markers for Answers */
+        .ans-circle {
+            position: absolute; width: 90%; height: 90%;
+            border: 6px solid #3b82f6; border-radius: 50%;
+            opacity: 0.7; z-index: 10;
+        }
+        .ans-cross {
+            position: absolute; width: 90%; height: 90%;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0.7; z-index: 10;
+        }
+        .cross-line {
+            position: absolute; width: 100%; height: 6px;
+            background: #ef4444; transform: rotate(45deg);
+        }
+        .cross-line.alt { transform: rotate(-45deg); }
+
+        @media print {
+            .no-print { display: none; }
+            body { background: white; padding: 0; margin: 0; }
+            .sheet { box-shadow: none; margin: 0; page-break-after: always; }
+            .sheet-scaler { transform: none !important; height: auto !important; }
+        }
+    </style>
+</head>
+<body class="p-0 m-0">
+
+<div class="no-print bg-white border-b border-sky-100 p-6 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-5xl mx-auto">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="bg-sky-500 text-white p-2 rounded-lg text-2xl">🔍</div>
+            <h1 class="text-2xl font-bold text-slate-800">注意力尋寶趣產生器</h1>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-1">📝 標題名稱</label>
+                <input type="text" id="titleInput" value="注意力大挑戰：尋找隱藏物品" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-sky-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-1">⭐ 難易度</label>
+                <select id="diffLevel" class="w-full border rounded-lg p-2 outline-none">
+                    <option value="easy">初階 (12個 - 大圖示)</option>
+                    <option value="medium" selected>中階 (20個 - 適中)</option>
+                    <option value="hard">高階 (35個 - 挑戰型)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-1">📄 產生張數</label>
+                <input type="number" id="pageCount" value="2" min="1" max="10" class="w-full border rounded-lg p-2 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-1">👁️ 解答設定</label>
+                <select id="showAns" class="w-full border rounded-lg p-2 outline-none">
+                    <option value="yes">每頁後附帶解答</option>
+                    <option value="no">僅產生題目</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="flex gap-3">
+            <button onclick="generate()" class="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded-xl shadow-lg transition-all active:scale-95">✨ 立即生成題目</button>
+            <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-6 rounded-xl transition-all">🖨️ 列印</button>
+            <button id="pdfBtn" onclick="downloadPDF()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 rounded-xl transition-all">📱 下載 PDF</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const itemDB = [
+        { name: "老虎", emoji: "🐯", cat: "animal" }, { name: "大象", emoji: "🐘", cat: "animal" },
+        { name: "猴子", emoji: "🐒", cat: "animal" }, { name: "企鵝", emoji: "🐧", cat: "animal" },
+        { name: "小雞", emoji: "🐥", cat: "animal" }, { name: "青蛙", emoji: "🐸", cat: "animal" },
+        { name: "海豚", emoji: "🐬", cat: "animal" }, { name: "章魚", emoji: "🐙", cat: "animal" },
+        { name: "蜜蜂", emoji: "🐝", cat: "animal" }, { name: "長頸鹿", emoji: "🦒", cat: "animal" },
+        { name: "倉鼠", emoji: "🐹", cat: "animal" }, { name: "熊貓", emoji: "🐼", cat: "animal" },
+        
+        { name: "汽車", emoji: "🚗", cat: "vehicle" }, { name: "巴士", emoji: "🚌", cat: "vehicle" },
+        { name: "飛機", emoji: "✈️", cat: "vehicle" }, { name: "火車", emoji: "🚂", cat: "vehicle" },
+        { name: "腳踏車", emoji: "🚲", cat: "vehicle" }, { name: "救護車", emoji: "🚑", cat: "vehicle" },
+        { name: "消防車", emoji: "🚒", cat: "vehicle" }, { name: "直升機", emoji: "🚁", cat: "vehicle" },
+        { name: "輪船", emoji: "🚢", cat: "vehicle" }, { name: "火箭", emoji: "🚀", cat: "vehicle" },
+        { name: "警車", emoji: "🚓", cat: "vehicle" }, { name: "機車", emoji: "🛵", cat: "vehicle" },
+
+        { name: "槌子", emoji: "🔨", cat: "tool" }, { name: "板手", emoji: "🔧", cat: "tool" },
+        { name: "螺絲起子", emoji: "🪛", cat: "tool" }, { name: "鋸子", emoji: "🪚", cat: "tool" },
+        { name: "剪刀", emoji: "✂️", cat: "tool" }, { name: "直尺", emoji: "📏", cat: "tool" },
+        { name: "筆記本", emoji: "📓", cat: "tool" }, { name: "放大鏡", emoji: "🔍", cat: "tool" },
+        { name: "燈泡", emoji: "💡", cat: "tool" }, { name: "計算機", emoji: "📟", cat: "tool" },
+        { name: "垃圾桶", emoji: "🗑️", cat: "tool" }, { name: "相機", emoji: "📷", cat: "tool" }
+    ];
+
+    const categories = [
+        { id: "animal", label: "動物", icon: "🐾" },
+        { id: "vehicle", label: "交通工具", icon: "🚀" },
+        { id: "tool", label: "生活工具", icon: "🛠️" }
+    ];
+
+    function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
+    function generate() {
+        const title = document.getElementById('titleInput').value;
+        const diff = document.getElementById('diffLevel').value;
+        const count = parseInt(document.getElementById('pageCount').value);
+        const showAns = document.getElementById('showAns').value;
+        const output = document.getElementById('output');
+        
+        output.innerHTML = "";
+        
+        let slotCount = 12;
+        let gridCols = "grid-cols-3";
+        if(diff === 'medium') { slotCount = 20; gridCols = "grid-cols-4"; }
+        if(diff === 'hard') { slotCount = 35; gridCols = "grid-cols-5"; }
+
+        for(let p = 1; p <= count; p++) {
+            // Pick two target categories for tasks
+            let cats = shuffle(categories);
+            let task1 = cats[0]; // Circle this
+            let task2 = cats[1]; // Cross this
+            
+            let selectedItems = shuffle(itemDB).slice(0, slotCount);
+            
+            output.appendChild(renderSheet(title, p, selectedItems, task1, task2, gridCols, false));
+            if(showAns === 'yes') {
+                output.appendChild(renderSheet(title + " (解答)", p, selectedItems, task1, task2, gridCols, true));
+            }
+        }
+        updateScale();
+    }
+
+    function renderSheet(title, pageNum, items, task1, task2, gridCols, isAns) {
+        const scaler = document.createElement('div');
+        scaler.className = "sheet-scaler";
+        
+        const sheet = document.createElement('div');
+        sheet.className = "sheet";
+        
+        // Header
+        const header = `
+            <div class="border-b-4 border-double border-sky-600 pb-4 mb-6">
+                <h2 class="text-center text-4xl font-black text-slate-800 mb-4">${title}</h2>
+                <div class="flex justify-between text-lg font-bold text-slate-600">
+                    <span>姓名：__________</span>
+                    <span>日期：___月___日</span>
+                    <span>得分：____</span>
+                </div>
+            </div>
+        `;
+
+        // Instructions
+        const instructions = `
+            <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4 mb-8 text-slate-700">
+                <p class="font-bold text-xl text-sky-800 mb-2">🕵️ 尋寶任務說明：</p>
+                <div class="space-y-1 text-lg">
+                    <p>🔵 看到所有的<span class="text-blue-600 font-black">【${task1.label}】</span>，請畫上一個<b>「大圓圈」</b>。</p>
+                    <p>🔴 看到所有的<span class="text-red-600 font-black">【${task2.label}】</span>，請畫上一個<b>「大叉叉」</b>。</p>
+                    <p>⚪ 其他不屬於以上類別的物品，請<span class="underline">不要做任何記號</span>。</p>
+                </div>
+            </div>
+        `;
+
+        // Game Grid
+        let gridHTML = `<div class="grid ${gridCols} gap-4 flex-grow content-start">`;
+        items.forEach(item => {
+            let marker = "";
+            if(isAns) {
+                if(item.cat === task1.id) marker = `<div class="ans-circle"></div>`;
+                if(item.cat === task2.id) marker = `<div class="ans-cross"><div class="cross-line"></div><div class="cross-line alt"></div></div>`;
+            }
+
+            const rot = Math.random() * 6 - 3;
+            gridHTML += `
+                <div class="item-card aspect-square" style="transform: rotate(${rot}deg)">
+                    <div class="item-emoji">${item.emoji}</div>
+                    <div class="item-name">${item.name}</div>
+                    ${marker}
+                </div>
+            `;
+        });
+        gridHTML += `</div>`;
+
+        // Counting Task
+        const counts = {
+            t1: items.filter(i => i.cat === task1.id).length,
+            t2: items.filter(i => i.cat === task2.id).length
+        };
+
+        const footer = `
+            <div class="mt-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl flex justify-around items-center text-xl font-bold text-amber-900">
+                <span>📊 結算：</span>
+                <span>${task1.label} 共有 [ ${isAns ? counts.t1 : '&nbsp;&nbsp;'} ] 個</span>
+                <span>${task2.label} 共有 [ ${isAns ? counts.t2 : '&nbsp;&nbsp;'} ] 個</span>
+            </div>
+            <div class="mt-8 pt-4 border-t text-sm text-slate-400 flex justify-between">
+                <span>注意力訓練系列 - 職能治療師設計輔助工具</span>
+                <span>第 ${pageNum} 頁</span>
+            </div>
+        `;
+
+        sheet.innerHTML = header + instructions + gridHTML + footer;
+        scaler.appendChild(sheet);
+        return scaler;
+    }
+
+    function updateScale() {
+        const containerWidth = document.body.clientWidth - 40;
+        const sheetWidth = 210 * 3.7795; 
+        let scale = Math.min(1, containerWidth / sheetWidth);
+        if(window.innerWidth < 800) {
+            document.querySelectorAll('.sheet-scaler').forEach(s => {
+                s.style.transform = `scale(${scale})`;
+                s.style.height = (297 * 3.7795 * scale) + "px";
+            });
+        } else {
+            document.querySelectorAll('.sheet-scaler').forEach(s => {
+                s.style.transform = "none";
+                s.style.height = "auto";
+            });
+        }
+    }
+
+    async function downloadPDF() {
+        const { jsPDF } = window.jspdf;
+        const btn = document.getElementById('pdfBtn');
+        const sheets = document.querySelectorAll('.sheet');
+        if (sheets.length === 0) return;
+
+        btn.disabled = true;
+        btn.innerText = "⏳ 轉檔中...";
+
+        try {
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            for (let i = 0; i < sheets.length; i++) {
+                const canvas = await html2canvas(sheets[i], { scale: 2 });
+                const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                if (i > 0) pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+            }
+            pdf.save('注意力尋寶挑戰.pdf');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "📱 下載 PDF";
+        }
+    }
+
+    window.addEventListener('resize', updateScale);
+    window.onload = generate;
+</script>
+
+<div id="output" class="flex flex-col items-center pb-20 mt-6"></div>
+
+</body>
+</html>
